@@ -55,10 +55,14 @@ func (e *Engine) stepCheck() error {
 			freeBytes, _ = strconv.ParseInt(strings.TrimPrefix(line, "F="), 10, 64)
 		}
 	}
+	e.sys.Version = strings.TrimSpace(e.sys.Version)
 	e.sys.FreeMB = freeBytes / 1024 / 1024
 	e.ev.SysInfo(e.sys)
 	e.log("board %s, arch %s, RouterOS %s, %d MB free", e.sys.Board, e.sys.Arch, e.sys.Version, e.sys.FreeMB)
 
+	if !rosVersionRe.MatchString(e.sys.Version) {
+		return fmt.Errorf("could not parse the RouterOS version %q reported by the router", e.sys.Version)
+	}
 	if _, err := assetSuffix(e.sys.Arch); err != nil {
 		return err
 	}
@@ -870,10 +874,18 @@ func (e *Engine) stepContainer() error {
 		e.log("[dry-run] would add container %s from %s", containerName, e.remoteTar)
 		return nil
 	}
-	e.ensureStorageDirs(panelDir, panelDir+"/containers")
+	e.ensureStorageDirs(panelDir, panelDir+"/containers", databaseSubdir)
+	e.removeObj("mount list "+databaseMountList, "/container/mounts", "list="+databaseMountList)
+	if out, err := e.cl.RunChecked(fmt.Sprintf("/container/mounts/add list=%s src=%q dst=%q",
+		databaseMountList, "/"+e.storage.path(databaseSubdir), databaseContainerDir), 15*time.Second); err != nil {
+		return fmt.Errorf("failed to add the database mount: %w (%s)", err, strings.TrimSpace(out))
+	}
+	e.pushRollback(func() {
+		_, _ = e.cl.RunRaw(fmt.Sprintf("/container/mounts/remove [find list=%s]", databaseMountList), 15*time.Second)
+	})
 	e.log("extracting tar and adding container %s (this can take a few minutes)", containerName)
-	if out, err := e.cl.RunChecked(fmt.Sprintf("/container/add file=%q interface=%s root-dir=%q name=%s dns=%s start-on-boot=yes logging=yes",
-		e.remoteTar, vethName, e.storage.path(containerRootSubdir), containerName, fallbackDNSServers), 5*time.Minute); err != nil {
+	if out, err := e.cl.RunChecked(fmt.Sprintf("/container/add file=%q interface=%s root-dir=%q name=%s dns=%s mountlists=%s start-on-boot=yes logging=yes",
+		e.remoteTar, vethName, e.storage.path(containerRootSubdir), containerName, fallbackDNSServers, databaseMountList), 5*time.Minute); err != nil {
 		return fmt.Errorf("failed to add container: %w (%s)", err, strings.TrimSpace(out))
 	}
 	e.pushRollback(func() {
