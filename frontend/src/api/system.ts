@@ -304,10 +304,21 @@ export async function updateForeignGateway(
   });
 }
 
+export interface DirectForeignRule {
+  id: string;
+  comment: string;
+  disabled: boolean;
+}
+
 export interface DirectForeignStatus {
   enabled: boolean;
   foreignRouteReady: boolean;
+  rules?: DirectForeignRule[];
   connectionsReset?: number;
+}
+
+export function isDirectForeignActive(status: DirectForeignStatus | null): boolean {
+  return !!status && (status.enabled || (status.rules ?? []).some((r) => !r.disabled));
 }
 
 export async function fetchDirectForeign(

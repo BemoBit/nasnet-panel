@@ -15,6 +15,7 @@ import {
   ApiError,
   fetchDirectForeign,
   fetchNetStatus,
+  isDirectForeignActive,
   setDirectForeign,
   type DirectForeignStatus,
   type SystemCredentials,
@@ -34,24 +35,33 @@ export function DirectForeignCard({ creds, onChanged, openRequest = 0 }: DirectF
   const [status, setStatus] = useState<DirectForeignStatus | null>(null);
   const [vpnDown, setVpnDown] = useState(false);
   const [forced, setForced] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!creds) return;
+    let failed = false;
     try {
       setStatus(await fetchDirectForeign(creds));
     } catch {
-      setStatus(null);
+      failed = true;
     }
     try {
       const probes = (await fetchNetStatus(creds)).filter((e) => e.type === 'vpn');
       setVpnDown(probes.some((e) => e.status === 'down'));
     } catch {
-      setVpnDown(false);
+      failed = true;
     }
+    setLoadFailed(failed);
   }, [creds]);
+
+  const closeDialog = useCallback(() => {
+    setConfirming(false);
+    setAcknowledged(false);
+    setForced(false);
+  }, []);
 
   usePolling(load, 5000, !!creds && !busy && !confirming);
 
@@ -75,8 +85,7 @@ export function DirectForeignCard({ creds, onChanged, openRequest = 0 }: DirectF
           title: t(enabled ? 'internet.direct.enabledToast' : 'internet.direct.disabledToast'),
           tone: enabled ? 'warning' : 'success',
         });
-        setConfirming(false);
-        setAcknowledged(false);
+        closeDialog();
         onChanged?.();
       } catch (err) {
         toast.notify({
@@ -89,15 +98,15 @@ export function DirectForeignCard({ creds, onChanged, openRequest = 0 }: DirectF
         setBusy(false);
       }
     },
-    [creds, toast, t, onChanged, load],
+    [creds, toast, t, onChanged, load, closeDialog],
   );
 
   const risks = useMemo(() => t('internet.direct.risks', { returnObjects: true }) as string[], [t]);
 
-  if (!status || !(vpnDown || status.enabled || forced || confirming)) return null;
+  const enabled = isDirectForeignActive(status);
+  if (!status || !(vpnDown || enabled || forced || confirming)) return null;
 
-  const enabled = status.enabled;
-  const warnNoRoute = !enabled && !status.foreignRouteReady;
+  const warnNoRoute = !status.foreignRouteReady;
 
   return (
     <Card>
@@ -115,6 +124,14 @@ export function DirectForeignCard({ creds, onChanged, openRequest = 0 }: DirectF
           </span>
           {warnNoRoute ? <Badge tone="danger">{t('internet.direct.noForeignRoute')}</Badge> : null}
         </div>
+        {loadFailed ? (
+          <div className={styles.state}>
+            <Badge tone="danger">{t('internet.direct.loadFailed')}</Badge>
+            <Button variant="ghost" size="sm" onClick={() => load()}>
+              {t('internet.direct.retry')}
+            </Button>
+          </div>
+        ) : null}
         {enabled ? (
           <Button loading={busy} onClick={() => apply(false)}>
             {t('internet.direct.restore')}
@@ -127,23 +144,13 @@ export function DirectForeignCard({ creds, onChanged, openRequest = 0 }: DirectF
       </div>
       <Dialog
         open={confirming}
-        onClose={() => {
-          setConfirming(false);
-          setAcknowledged(false);
-        }}
+        onClose={closeDialog}
         title={t('internet.direct.confirmTitle')}
         description={t('internet.direct.confirmDescription')}
         size="sm"
         footer={
           <>
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => {
-                setConfirming(false);
-                setAcknowledged(false);
-              }}
-            >
+            <Button variant="ghost" disabled={busy} onClick={closeDialog}>
               {t('internet.direct.cancel')}
             </Button>
             <Button

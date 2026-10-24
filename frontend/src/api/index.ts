@@ -40,6 +40,8 @@ export {
   fetchDirectForeign,
   setDirectForeign,
   type DirectForeignStatus,
+  type DirectForeignRule,
+  isDirectForeignActive,
   fetchVPNClients,
   rebootSystem,
   setSystemIdentity,

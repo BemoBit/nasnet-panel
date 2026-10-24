@@ -43,7 +43,12 @@ const interfaces = [
 
 async function mockApi(
   context: BrowserContext,
-  state: { enabled: boolean; ready: boolean; vpnDown?: boolean },
+  state: {
+    enabled: boolean;
+    ready: boolean;
+    vpnDown?: boolean;
+    rules?: Array<{ id: string; comment: string; disabled: boolean }>;
+  },
 ) {
   const puts: unknown[] = [];
   await context.route('**/api/net/status', (route) =>
@@ -79,7 +84,7 @@ async function mockApi(
       body: envelope({
         enabled: state.enabled,
         foreignRouteReady: state.ready,
-        rules: [],
+        rules: state.rules ?? [],
       }),
     });
   });
@@ -148,5 +153,29 @@ test.describe('Direct foreign mode', () => {
 
     await expect(page.getByRole('img', { name: 'Routing topology' })).toBeVisible();
     await expect(page.getByText('Direct foreign mode')).toHaveCount(0);
+  });
+
+  test('offers the restore action while only some rules are on', async ({
+    page,
+    context,
+    resetMocks,
+    seedRouter,
+  }) => {
+    await resetMocks();
+    await seedRouter({ id: ROUTER_ID, name: 'Direct Router', host: '10.0.0.10' });
+    await seedCredentials(context, ROUTER_ID);
+    await mockApi(context, {
+      enabled: false,
+      ready: true,
+      vpnDown: false,
+      rules: [
+        { id: '*1', comment: 'a', disabled: false },
+        { id: '*2', comment: 'b', disabled: true },
+      ],
+    });
+
+    await page.goto(`/router/${ROUTER_ID}/internet`);
+
+    await expect(page.getByRole('button', { name: 'Restore VPN routing' })).toBeVisible();
   });
 });

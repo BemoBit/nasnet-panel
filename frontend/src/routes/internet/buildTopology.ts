@@ -2,6 +2,7 @@ import {
   fetchDirectForeign,
   fetchForeignGateway,
   fetchInterfaces,
+  isDirectForeignActive,
   fetchNetStatus,
   listVPNClients,
   type InterfaceResponse,
@@ -83,7 +84,7 @@ export async function buildTopology(
     listVPNClients(creds, signal).catch(() => []),
     fetchDirectForeign(creds, signal).catch(() => null),
   ]);
-  const direct = directStatus?.enabled === true;
+  const direct = isDirectForeignActive(directStatus);
   const pingByName = new Map(vpnClients.map((c) => [c.name, c.pingTime]));
 
   const isNetDown = (type: NetStatusEntry['type']) =>
@@ -171,7 +172,7 @@ export async function buildTopology(
         id: `h_internet_wan_${vpnUpstream.name}`,
         fromId: `wan_${vpnUpstream.name}`,
         toId: INTERNET_ID,
-        isActive: direct && !!vpnUpstream.running && !foreignDown,
+        isActive: direct && directStatus.foreignRouteReady && !!vpnUpstream.running && !foreignDown,
       });
     }
   }

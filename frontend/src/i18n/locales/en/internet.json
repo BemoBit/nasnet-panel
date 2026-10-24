@@ -70,7 +70,9 @@
       "disabledToast": "VPN routing restored.",
       "failedTitle": "Could not change direct foreign mode",
       "vpnDialogHint": "The VPN not working?",
-      "vpnDialogAction": "Bypass the VPN (go direct)…"
+      "vpnDialogAction": "Bypass the VPN (go direct)…",
+      "loadFailed": "Could not refresh the status",
+      "retry": "Retry"
     }
   },
   "wan": {
