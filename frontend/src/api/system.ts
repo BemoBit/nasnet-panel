@@ -304,6 +304,41 @@ export async function updateForeignGateway(
   });
 }
 
+export interface DirectForeignStatus {
+  enabled: boolean;
+  foreignRouteReady: boolean;
+  connectionsReset?: number;
+}
+
+export async function fetchDirectForeign(
+  creds: SystemCredentials,
+  signal?: AbortSignal,
+): Promise<DirectForeignStatus> {
+  return apiRequest<DirectForeignStatus>('/api/route/direct-foreign', {
+    method: 'GET',
+    headers: authHeaders(creds),
+    cache: 'no-store',
+    signal,
+  });
+}
+
+export async function setDirectForeign(
+  creds: SystemCredentials,
+  enabled: boolean,
+  acknowledge: boolean,
+  signal?: AbortSignal,
+): Promise<DirectForeignStatus> {
+  return apiRequest<DirectForeignStatus>('/api/route/direct-foreign', {
+    method: 'PUT',
+    headers: {
+      ...authHeaders(creds),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ enabled, acknowledge }),
+    signal,
+  });
+}
+
 export async function fetchVPNClients(
   creds: SystemCredentials,
   signal?: AbortSignal,
