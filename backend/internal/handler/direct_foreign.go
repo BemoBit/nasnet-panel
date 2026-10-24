@@ -17,8 +17,9 @@ const (
 	directForeignRoutingMark = "to-Foreign"
 
 	directForeignNetwatchComment = "Failover Netwatch - VPN-Client"
-	directForeignRestoreScript   = "\n/ip firewall mangle disable [find where comment~\"" + directForeignRulePrefix + "\"]\n"
-	directForeignLegacyScript    = "\n/routing rule disable [find where comment~\"" + directForeignRulePrefix + "\"]\n"
+	directForeignRestoreCommand  = "/ip firewall mangle disable [find where comment~\"" + directForeignRulePrefix + "\"]"
+	directForeignRestoreScript   = "\n" + directForeignRestoreCommand + "\n"
+	directForeignLegacyCommand   = "/routing rule disable [find where comment~\"" + directForeignRulePrefix + "\"]"
 )
 
 type directForeignRule struct {
@@ -258,11 +259,14 @@ func ensureDirectForeignAutoRestore(client *routeros.Client) error {
 	}
 
 	for i := range probes {
-		script := strings.ReplaceAll(probes[i].UpScript, directForeignLegacyScript, "")
-		if strings.Contains(script, directForeignRestoreScript) {
+		script := strings.ReplaceAll(probes[i].UpScript, directForeignLegacyCommand, "")
+		hasRestore := strings.Contains(script, directForeignRestoreCommand)
+		if hasRestore && script == probes[i].UpScript {
 			continue
 		}
-		script = strings.TrimRight(script, " \t\r\n") + directForeignRestoreScript
+		if !hasRestore {
+			script = strings.TrimRight(script, " \t\r\n") + directForeignRestoreScript
+		}
 		if _, err := client.UpdateNetwatch(probes[i].ID, routeros.UpdateNetwatchParams{UpScript: &script}); err != nil {
 			return err
 		}
