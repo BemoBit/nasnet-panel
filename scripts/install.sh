@@ -68,6 +68,7 @@ IMAGE_TAR=""
 STORAGE_CHOICE=""
 LAN_PORT=8080
 HTTPS_LAN_PORT=8443
+LAN_DST_NET="192.168.0.0/16"
 WIFI_UPLINK=0
 WIFI_SSID=""
 WIFI_PASSWORD="${WIFI_PASSWORD:-}"
@@ -1495,13 +1496,15 @@ configure_network() {
 
   ros_ensure "dstnat tcp/${LAN_PORT} -> ${VETH_IP}:80" \
     /ip/firewall/nat "comment=\"${COMMENT_TAG}-dstnat\"" \
-    "chain=dstnat action=dst-nat protocol=tcp dst-port=${LAN_PORT} to-addresses=${VETH_IP} to-ports=80 comment=\"${COMMENT_TAG}-dstnat\""
+    "chain=dstnat action=dst-nat protocol=tcp dst-address=${LAN_DST_NET} dst-port=${LAN_PORT} to-addresses=${VETH_IP} to-ports=80 comment=\"${COMMENT_TAG}-dstnat\""
   ros_move_to_top /ip/firewall/nat "comment=\"${COMMENT_TAG}-dstnat\""
 
   ros_ensure "dstnat tcp/${HTTPS_LAN_PORT} -> ${VETH_IP}:443" \
     /ip/firewall/nat "comment=\"${COMMENT_TAG}-dstnat-https\"" \
-    "chain=dstnat action=dst-nat protocol=tcp dst-port=${HTTPS_LAN_PORT} to-addresses=${VETH_IP} to-ports=443 comment=\"${COMMENT_TAG}-dstnat-https\""
+    "chain=dstnat action=dst-nat protocol=tcp dst-address=${LAN_DST_NET} dst-port=${HTTPS_LAN_PORT} to-addresses=${VETH_IP} to-ports=443 comment=\"${COMMENT_TAG}-dstnat-https\""
   ros_move_to_top /ip/firewall/nat "comment=\"${COMMENT_TAG}-dstnat-https\""
+
+  restrict_panel_dstnat || return 1
 
   ros_ensure "forward accept tcp/80 -> ${VETH_IP}" \
     /ip/firewall/filter "comment=\"${COMMENT_TAG}-forward\"" \
@@ -1512,6 +1515,19 @@ configure_network() {
     /ip/firewall/filter "comment=\"${COMMENT_TAG}-forward-https\"" \
     "chain=forward action=accept protocol=tcp dst-address=${VETH_IP} dst-port=443 comment=\"${COMMENT_TAG}-forward-https\""
   ros_move_to_top /ip/firewall/filter "comment=\"${COMMENT_TAG}-forward-https\""
+}
+
+restrict_panel_dstnat() {
+  local tag
+  for tag in dstnat dstnat-https; do
+    if (( DRY_RUN )); then
+      printf '  ~ %s-%s limited to %s (would set)\n' "$COMMENT_TAG" "$tag" "$LAN_DST_NET"
+      continue
+    fi
+    ros_cmd "/ip/firewall/nat/set [find comment=\"${COMMENT_TAG}-${tag}\"] dst-address=${LAN_DST_NET}" >/dev/null \
+      || { err "failed to limit ${COMMENT_TAG}-${tag} to ${LAN_DST_NET}"; return 1; }
+    printf '  \033[32m✓\033[0m %s-%s limited to %s\n' "$COMMENT_TAG" "$tag" "$LAN_DST_NET"
+  done
 }
 
 mount_uses_lists() {

@@ -488,7 +488,8 @@ add chain=input dst-port="53" in-interface-list="WAN" protocol="tcp" action=drop
 add chain=input dst-port="53" in-interface-list="WAN" protocol="udp" action=drop comment="Block Open Recursive DNS"
 add chain=input dst-port="80,443,8080,8443,22" in-interface-list="WAN" protocol="tcp" action=drop comment="Block WAN access to management ports"
 
-/ip firewall nat set [find comment="nasnet-panel-installer-dstnat"] in-interface-list="!WAN"
+/ip firewall nat set [find comment="nasnet-panel-installer-dstnat"] in-interface-list="!WAN" dst-address=192.168.0.0/16
+/ip firewall nat set [find comment="nasnet-panel-installer-dstnat-https"] in-interface-list="!WAN" dst-address=192.168.0.0/16
 /ip firewall nat set [find comment="nasnet-panel-installer-srcnat"] out-interface-list="WAN"
 /ip firewall filter set [find comment="nasnet-panel-installer-forward"] in-interface-list="!WAN"
 
