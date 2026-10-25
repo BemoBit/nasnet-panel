@@ -41,7 +41,6 @@ const (
 
 	lanBridge         = "LANBridgeSplit"
 	lanBridgeIP       = "192.168.10.1"
-	lanDstNet         = "192.168.0.0/16"
 	lanBaselineRsc    = "nasnet-lan-baseline.rsc"
 	lanBaselineRemote = panelDir + "/" + lanBaselineRsc
 

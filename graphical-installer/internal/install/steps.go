@@ -837,17 +837,20 @@ func (e *Engine) stepNetwork() error {
 	}
 	if err := e.ensure(fmt.Sprintf("dstnat tcp/%d to %s:80", e.opts.LANPort, vethIP),
 		"/ip/firewall/nat", fmt.Sprintf("comment=%q", commentTag+"-dstnat"),
-		fmt.Sprintf("chain=dstnat action=dst-nat protocol=tcp dst-address=%s dst-port=%d to-addresses=%s to-ports=80 comment=%q", lanDstNet, e.opts.LANPort, vethIP, commentTag+"-dstnat")); err != nil {
+		fmt.Sprintf("chain=dstnat action=dst-nat protocol=tcp dst-address-type=local dst-port=%d to-addresses=%s to-ports=80 comment=%q", e.opts.LANPort, vethIP, commentTag+"-dstnat")); err != nil {
 		return err
 	}
 	e.moveToTop("/ip/firewall/nat", fmt.Sprintf("comment=%q", commentTag+"-dstnat"))
 
 	if err := e.ensure(fmt.Sprintf("dstnat tcp/%d to %s:443", e.opts.HTTPSLANPort, vethIP),
 		"/ip/firewall/nat", fmt.Sprintf("comment=%q", commentTag+"-dstnat-https"),
-		fmt.Sprintf("chain=dstnat action=dst-nat protocol=tcp dst-address=%s dst-port=%d to-addresses=%s to-ports=443 comment=%q", lanDstNet, e.opts.HTTPSLANPort, vethIP, commentTag+"-dstnat-https")); err != nil {
+		fmt.Sprintf("chain=dstnat action=dst-nat protocol=tcp dst-address-type=local dst-port=%d to-addresses=%s to-ports=443 comment=%q", e.opts.HTTPSLANPort, vethIP, commentTag+"-dstnat-https")); err != nil {
 		return err
 	}
 	e.moveToTop("/ip/firewall/nat", fmt.Sprintf("comment=%q", commentTag+"-dstnat-https"))
+	if err := e.limitPanelDstNat(); err != nil {
+		return err
+	}
 
 	if err := e.ensure(fmt.Sprintf("forward accept tcp/80 to %s", vethIP),
 		"/ip/firewall/filter", fmt.Sprintf("comment=%q", commentTag+"-forward"),
@@ -862,6 +865,22 @@ func (e *Engine) stepNetwork() error {
 		return err
 	}
 	e.moveToTop("/ip/firewall/filter", fmt.Sprintf("comment=%q", commentTag+"-forward-https"))
+	return nil
+}
+
+func (e *Engine) limitPanelDstNat() error {
+	for _, tag := range []string{"-dstnat", "-dstnat-https"} {
+		selector := fmt.Sprintf("[find comment=%q]", commentTag+tag)
+		if e.opts.DryRun {
+			e.log("[dry-run] would limit %s to router-local destinations", commentTag+tag)
+			continue
+		}
+		_, _ = e.cl.RunRaw(fmt.Sprintf("/ip/firewall/nat/unset %s dst-address", selector), 15*time.Second)
+		if out, err := e.cl.Run(fmt.Sprintf("/ip/firewall/nat/set %s dst-address-type=local", selector)); err != nil {
+			return fmt.Errorf("failed to limit %s to router-local destinations: %w (%s)", commentTag+tag, err, strings.TrimSpace(out))
+		}
+		e.log("limited %s to router-local destinations", commentTag+tag)
+	}
 	return nil
 }
 
